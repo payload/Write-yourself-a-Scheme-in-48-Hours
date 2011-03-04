@@ -31,9 +31,26 @@ parseExpr =
 parseString :: Parser LispVal
 parseString = do
     char '"'
-    val <- many $ noneOf "\""
+    val <- many parseInString
     char '"'
     return $ String val
+    
+parseInString :: Parser Char
+parseInString = do
+    c <- noneOf "\""
+    case c of
+        '\\' -> parseEscapeInString
+        _    -> return c
+        
+parseEscapeInString :: Parser Char
+parseEscapeInString = do
+    c <- oneOf "\"\\ntr"
+    return $ case c of
+        '"' -> '"'
+        'n' -> '\n'
+        't' -> '\t'
+        'r' -> '\r'
+        '\\' -> '\\'
     
 parseAtom :: Parser LispVal
 parseAtom = do
@@ -46,8 +63,9 @@ parseAtom = do
         _    -> Atom atom
         
 parseNumber :: Parser LispVal
-parseNumber =
-    liftM (Number . read) $ many1 digit
+parseNumber = do
+    str <- many1 digit
+    return $ Number $ read str
     
 symbol :: Parser Char
 symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
