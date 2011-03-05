@@ -16,7 +16,12 @@ instance Show LispVal where
 
 main = do
     args <- getArgs
-    putStrLn $ readExpr $ args !! 0
+    print $ eval $ readExpr $ head args
+
+eval :: LispVal -> LispVal
+eval (List [Atom "quote", val]) = val
+--eval (List (func:list)) = apply func list
+eval val = val
 
 showVal :: LispVal -> String
 showVal (Atom name) = name
@@ -30,11 +35,11 @@ showVal (DottedList front end) =
     "(" ++ showVals front ++ showVal end ++ ")"
 showVals = unwords . map showVal
 
-readExpr :: String -> String
+readExpr :: String -> LispVal
 readExpr input =
     case parse parseExpr "lisp" input of
-    Left err -> "No match: " ++ show err
-    Right val -> show val
+    Left err -> String $ "No match: " ++ show err
+    Right val -> val
 
 parseExpr :: Parser LispVal
 parseExpr =
