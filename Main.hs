@@ -10,11 +10,25 @@ data LispVal =
     Number Integer |
     String String |
     Bool Bool
-    deriving Show
+
+instance Show LispVal where
+    show = showVal
 
 main = do
     args <- getArgs
     putStrLn $ readExpr $ args !! 0
+
+showVal :: LispVal -> String
+showVal (Atom name) = name
+showVal (Number x) = show x
+showVal (String s) = show s
+showVal (Bool True) = "#t"
+showVal (Bool False) = "#f"
+showVal (List list) =
+    "(" ++ showVals list ++ ")"
+showVal (DottedList front end) =
+    "(" ++ showVals front ++ showVal end ++ ")"
+showVals = unwords . map showVal
 
 readExpr :: String -> String
 readExpr input =
