@@ -20,8 +20,35 @@ main = do
 
 eval :: LispVal -> LispVal
 eval (List [Atom "quote", val]) = val
---eval (List (func:list)) = apply func list
+eval (List (Atom func : args)) = apply func $ map eval args
 eval val = val
+
+apply :: String -> [LispVal] -> LispVal
+apply func args =
+    maybe (Bool False) ($ args) $ lookup func primitives
+    
+primitives :: [(String, [LispVal] -> LispVal)]
+primitives = [
+    ("+", numericBinop (+)),
+    ("-", numericBinop (-)),
+    ("*", numericBinop (*)),
+    ("/", numericBinop div),
+    ("mod", numericBinop mod),
+    ("quotient", numericBinop quot),
+    ("remainder", numericBinop rem)
+    ]
+
+numericBinop op args =
+    Number $ foldl1 op $ map unpackNumber args 
+
+unpackNumber (Number n) = n
+unpackNumber (List [n]) = unpackNumber n
+unpackNumber (String s) =
+    let parsed = reads s in
+    if null parsed
+    then 0
+    else fst $ head parsed
+unpackNumber _ = 0
 
 showVal :: LispVal -> String
 showVal (Atom name) = name
