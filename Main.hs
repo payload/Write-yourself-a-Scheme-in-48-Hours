@@ -84,7 +84,48 @@ primitives = [
     ("string<?", strBoolBinop (<)),
     ("string>?", strBoolBinop (>)),
     ("string<=?", strBoolBinop (<=)),
-    ("string>=?", strBoolBinop (>=))]
+    ("string>=?", strBoolBinop (>=)),
+    ("car", car),
+    ("cdr", cdr),
+    ("cons", cons),
+    ("eqv", eqv)]
+
+car :: [LispVal] -> ThrowsError LispVal
+car [List (x:_)] = return x
+car [DottedList (x:_) _] = return x
+car [x] = throwError $ TypeMismatch "List" x
+car args@(_:_) = throwError $ NumArgs 1 args
+
+cdr :: [LispVal] -> ThrowsError LispVal
+cdr [List (_:xs)] = return $ List xs
+cdr [DottedList [_] x] = return x
+cdr [DottedList (_:xs) x] = return $ DottedList xs x
+cdr [x] = throwError $ TypeMismatch "List" x
+cdr args@(_:_) = throwError $ NumArgs 1 args
+
+cons :: [LispVal] -> ThrowsError LispVal
+cons [x,List []] = return $ List [x]
+cons [x,List xs] = return $ List $ x:xs
+cons [x,DottedList xs end] = return $ DottedList (x:xs) end
+cons [a,b] = return $ DottedList [a] b
+cons args = throwError $ NumArgs 2 args
+
+eqv :: [LispVal] -> ThrowsError LispVal
+eqv [Bool a, Bool b] = return $ Bool $ a == b
+eqv [String a, String b] = return $ Bool $ a == b
+eqv [Number a, Number b] = return $ Bool $ a == b
+eqv [Atom a, Atom b] = return $ Bool $ a == b
+eqv [DottedList as a, DottedList bs b] =
+    eqv [(List $ as ++ [a]), (List $ bs ++ [b])]
+eqv [List as, List bs] =
+    return $ Bool $
+        all eqvPair $ zip as bs
+    where
+        eqvPair (a,b) = case eqv [a, b] of
+            Left err -> False
+            Right (Bool val) -> val
+eqv [_,_] = return $ Bool False
+eqv args = throwError $ NumArgs 2 args
 
 numericBinop ::
     (Integer -> Integer -> Integer) ->
@@ -148,7 +189,7 @@ showVal (Bool False) = "#f"
 showVal (List list) =
     "(" ++ showVals list ++ ")"
 showVal (DottedList front end) =
-    "(" ++ showVals front ++ showVal end ++ ")"
+    "(" ++ showVals front ++ " . " ++ showVal end ++ ")"
 showVals = unwords . map showVal
 
 readExpr :: String -> ThrowsError LispVal
