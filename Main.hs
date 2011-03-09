@@ -4,6 +4,7 @@ import System.Environment
 import Text.ParserCombinators.Parsec hiding (spaces)
 import Control.Monad
 import Control.Monad.Error
+import IO hiding (try)
 
 data LispVal =
     Atom String |
@@ -40,11 +41,6 @@ extractValue (Right val) = val
 
 data Unpacker =
     forall a. Eq a => AnyUnpacker (LispVal -> ThrowsError a)
-
-main = do
-    args <- getArgs
-    evaled <- return $ liftM show ((readExpr $ head args) >>= eval)
-    putStrLn $ extractValue $ trapError evaled
 
 eval :: LispVal -> ThrowsError LispVal
 eval val@(Number _) = return val
@@ -302,3 +298,39 @@ symbol = oneOf "!#$%&|*+-/:<=>?@^_~"
 
 spaces :: Parser ()
 spaces = skipMany1 space
+
+-----------------------------------------
+
+flushStr :: String -> IO ()
+flushStr s = putStr s >> hFlush stdout
+
+readPrompt :: String -> IO String
+readPrompt s = flushStr s >> getLine
+
+evalString :: String -> IO String
+evalString s = do
+    evaled <- return $ liftM show ((readExpr s) >>= eval)
+    return $ extractValue $ trapError $ evaled
+
+evalAndPrint :: String -> IO ()
+evalAndPrint s = 
+    evalString s >>= putStrLn
+    
+until_ :: Monad m => (a -> Bool) -> (m a) -> (a -> m ()) -> (m ())
+until_ cond prompt action = do
+    input <- prompt
+    if cond input
+        then return ()
+        else action input >> until_ cond prompt action
+        
+runRepl :: IO ()
+runRepl = until_ (== "quit") (readPrompt "> ") evalAndPrint
+
+main :: IO ()
+main = do
+    args <- getArgs
+    case length args of
+        0 -> runRepl
+        1 -> evalAndPrint $ args !! 0
+        _ -> putStrLn "nothing for repl or an expression!"
+
