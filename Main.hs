@@ -64,17 +64,59 @@ primitives = [
     ("/", numericBinop div),
     ("mod", numericBinop mod),
     ("quotient", numericBinop quot),
-    ("remainder", numericBinop rem)
-    ]
+    ("remainder", numericBinop rem),
+    ("=", numBoolBinop (==)),
+    ("<", numBoolBinop (<)),
+    (">", numBoolBinop (>)),
+    ("/=", numBoolBinop (/=)),
+    (">=", numBoolBinop (>=)),
+    ("<=", numBoolBinop (<=)),
+    ("&&", boolBoolBinop (&&)),
+    ("||", boolBoolBinop (||)),
+    ("string=?", strBoolBinop (==)),
+    ("string<?", strBoolBinop (<)),
+    ("string>?", strBoolBinop (>)),
+    ("string<=?", strBoolBinop (<=)),
+    ("string>=?", strBoolBinop (>=))]
 
+numericBinop ::
+    (Integer -> Integer -> Integer) ->
+    [LispVal] ->
+    ThrowsError LispVal
 numericBinop op x@[_] = throwError $ NumArgs 2 x
 numericBinop op args = do
     nums <- mapM unpackNumber args
     return $ Number $ foldl1 op nums
 
+boolBinop :: 
+    (LispVal -> ThrowsError a) -> 
+    (a -> a -> Bool) -> 
+    [LispVal] -> 
+    ThrowsError LispVal
+boolBinop unpacker op args =
+    if length args /= 2
+    then throwError $ NumArgs 2 args
+    else do
+        a <- unpacker $ args !! 0
+        b <- unpacker $ args !! 1
+        return $ Bool $ a `op` b
+
+numBoolBinop = boolBinop unpackNumber
+boolBoolBinop = boolBinop unpackBool
+strBoolBinop = boolBinop unpackString
+
+unpackNumber :: LispVal -> ThrowsError Integer
 unpackNumber (Number n) = return n
 unpackNumber (List [n]) = unpackNumber n
 unpackNumber val = throwError $ TypeMismatch "Number" val
+
+unpackBool :: LispVal -> ThrowsError Bool
+unpackBool (Bool b) = return b
+unpackBool val = throwError $ TypeMismatch "Bool" val
+
+unpackString :: LispVal -> ThrowsError String
+unpackString (String s) = return s
+unpackString val = throwError $ TypeMismatch "String" val
     
 showErr :: LispError -> String
 showErr (UnboundVar msg var) =
