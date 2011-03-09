@@ -1,3 +1,4 @@
+{-# Language ExistentialQuantification #-}
 module Main where
 import System.Environment
 import Text.ParserCombinators.Parsec hiding (spaces)
@@ -36,6 +37,9 @@ trapError action = catchError action (return . show)
 
 extractValue :: ThrowsError a -> a
 extractValue (Right val) = val
+
+data Unpacker =
+    forall a. Eq a => AnyUnpacker (LispVal -> ThrowsError a)
 
 main = do
     args <- getArgs
@@ -88,7 +92,8 @@ primitives = [
     ("car", car),
     ("cdr", cdr),
     ("cons", cons),
-    ("eqv", eqv)]
+    ("eqv?", eqv),
+    ("equals?", equals)]
 
 car :: [LispVal] -> ThrowsError LispVal
 car [List (x:_)] = return x
@@ -119,13 +124,34 @@ eqv [DottedList as a, DottedList bs b] =
     eqv [(List $ as ++ [a]), (List $ bs ++ [b])]
 eqv [List as, List bs] =
     return $ Bool $
-        all eqvPair $ zip as bs
+        (length as == length bs) &&
+        (all eqvPair $ zip as bs)
     where
         eqvPair (a,b) = case eqv [a, b] of
             Left err -> False
             Right (Bool val) -> val
 eqv [_,_] = return $ Bool False
 eqv args = throwError $ NumArgs 2 args
+
+equals :: [LispVal] -> ThrowsError LispVal
+equals [a,b] = do
+    primEq <- liftM or $ mapM (unpackEquals a b) unpackers
+    eqvEq <- eqv [a, b]
+    return $ Bool $ primEq || let (Bool x) = eqvEq in x
+    where
+        unpackers = [
+            AnyUnpacker unpackNumber,
+            AnyUnpacker unpackString,
+            AnyUnpacker unpackBool]
+equals args = throwError $ NumArgs 2 args
+
+unpackEquals :: LispVal -> LispVal -> Unpacker -> ThrowsError Bool
+unpackEquals a b (AnyUnpacker unpacker) = catchError 
+    (do
+        una <- unpacker a
+        unb <- unpacker b
+        return $ una == unb)
+    (const $ return False)
 
 numericBinop ::
     (Integer -> Integer -> Integer) ->
@@ -155,6 +181,9 @@ strBoolBinop = boolBinop unpackString
 
 unpackNumber :: LispVal -> ThrowsError Integer
 unpackNumber (Number n) = return n
+unpackNumber (String s) = return $ read s
+unpackNumber (Bool True) = return 1
+unpackNumber (Bool False) = return 0
 unpackNumber (List [n]) = unpackNumber n
 unpackNumber val = throwError $ TypeMismatch "Number" val
 
